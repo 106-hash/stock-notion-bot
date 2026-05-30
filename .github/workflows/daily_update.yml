@@ -25,10 +25,16 @@ jobs:
       - name: 패키지 설치
         run: pip install -r requirements.txt
 
-      - name: 노션 업데이트 실행
+      - name: KRX 업종 섹터 업데이트
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DAILY_DB_ID: ${{ secrets.NOTION_DAILY_DB_ID }}
           NOTION_WEEKLY_DB_ID: ${{ secrets.NOTION_WEEKLY_DB_ID }}
           NOTION_MONTHLY_DB_ID: ${{ secrets.NOTION_MONTHLY_DB_ID }}
         run: python sector_to_notion.py
+
+      - name: 네이버 테마 업데이트
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_THEME_DB_ID: ${{ secrets.NOTION_THEME_DB_ID }}
+        run: python theme_to_notion.py
