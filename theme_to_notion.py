@@ -16,6 +16,7 @@ NOTION_TOKEN  = os.environ.get("NOTION_TOKEN", "")
 THEME_DB_ID   = os.environ.get("NOTION_THEME_DB_ID", "")
 
 HEADERS_NOTION = {
+    "Accept-Charset": "utf-8",
     "Authorization": f"Bearer {NOTION_TOKEN}",
     "Content-Type": "application/json",
     "Notion-Version": "2022-06-28",
@@ -137,6 +138,7 @@ def notion_delete(page_id: str):
         pass
 
 def notion_create(db_id: str, label: str, rank: int, theme: dict, stocks_str: str, tag: str):
+    import json as json_lib
     url = "https://api.notion.com/v1/pages"
     props = {
         "테마명":      {"title":     [{"text": {"content": theme["theme"]}}]},
@@ -147,13 +149,11 @@ def notion_create(db_id: str, label: str, rank: int, theme: dict, stocks_str: st
         "구성종목":    {"rich_text": [{"text": {"content": stocks_str}}]},
         "구분":        {"select":    {"name": tag}},
     }
+    payload = {"parent": {"database_id": db_id}, "properties": props}
     try:
-        res = requests.post(
-            url,
-            headers=HEADERS_NOTION,
-            json={"parent": {"database_id": db_id}, "properties": props},
-            timeout=10,
-        )
+        body = json_lib.dumps(payload, ensure_ascii=False).encode("utf-8")
+        headers = {**HEADERS_NOTION, "Content-Type": "application/json; charset=utf-8"}
+        res = requests.post(url, headers=headers, data=body, timeout=10)
         if res.status_code not in (200, 201):
             print(f"  노션 오류 {res.status_code}: {res.text[:100]}")
     except Exception as e:
