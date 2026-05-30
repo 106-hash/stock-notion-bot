@@ -2,12 +2,8 @@ name: 주도섹터 노션 자동 업데이트
 
 on:
   schedule:
-    # 평일 오전 10시 (KST) = UTC 01:00
     - cron: "0 1 * * 1-5"
-    # 평일 오후 3시 (KST) = UTC 06:00
     - cron: "0 6 * * 1-5"
-
-  # 수동 실행도 가능하게
   workflow_dispatch:
 
 jobs:
@@ -33,3 +29,5 @@ jobs:
           NOTION_WEEKLY_DB_ID: ${{ secrets.NOTION_WEEKLY_DB_ID }}
           NOTION_MONTHLY_DB_ID: ${{ secrets.NOTION_MONTHLY_DB_ID }}
         run: python sector_to_notion.py
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
