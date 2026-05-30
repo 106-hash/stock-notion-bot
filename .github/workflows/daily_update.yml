@@ -31,4 +31,4 @@ jobs:
           NOTION_DAILY_DB_ID: ${{ secrets.NOTION_DAILY_DB_ID }}
           NOTION_WEEKLY_DB_ID: ${{ secrets.NOTION_WEEKLY_DB_ID }}
           NOTION_MONTHLY_DB_ID: ${{ secrets.NOTION_MONTHLY_DB_ID }}
-        run: python sector_to_notion.py
+        run: python test_krx.py
