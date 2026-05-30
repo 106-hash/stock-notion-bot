@@ -1,14 +1,15 @@
 """
 네이버 금융 테마 → 노션 자동 업데이트
+curl 방식으로 한글 인코딩 문제 완전 우회
 """
 
 import os
 import json
-import urllib.request
-import urllib.parse
+import subprocess
 import time
 from datetime import datetime
 from bs4 import BeautifulSoup
+import requests
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
 THEME_DB_ID  = os.environ.get("NOTION_THEME_DB_ID", "")
@@ -17,19 +18,28 @@ WEB_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
 }
 
-def notion_request(method, path, payload=None):
-    """urllib로 노션 API 호출 (한글 인코딩 문제 우회)"""
+def notion_curl(method, path, payload=None):
+    """curl 명령어로 노션 API 호출 - 인코딩 문제 완전 우회"""
     url = f"https://api.notion.com{path}"
-    data = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload else None
-    req = urllib.request.Request(url, data=data, method=method)
-    req.add_header("Authorization", f"Bearer {NOTION_TOKEN}")
-    req.add_header("Notion-Version", "2022-06-28")
-    req.add_header("Content-Type", "application/json")
+    body = json.dumps(payload, ensure_ascii=False) if payload else "{}"
+
+    cmd = [
+        "curl", "-s", "-X", method, url,
+        "-H", f"Authorization: Bearer {NOTION_TOKEN}",
+        "-H", "Notion-Version: 2022-06-28",
+        "-H", "Content-Type: application/json",
+        "--data-binary", "@-"
+    ]
     try:
-        with urllib.request.urlopen(req, timeout=10) as res:
-            return json.loads(res.read().decode("utf-8"))
+        result = subprocess.run(
+            cmd,
+            input=body.encode("utf-8"),
+            capture_output=True,
+            timeout=15
+        )
+        return json.loads(result.stdout.decode("utf-8"))
     except Exception as e:
-        print(f"  API 오류: {e}")
+        print(f"  curl 오류: {e}")
         return {}
 
 def get_time_slot():
@@ -37,13 +47,11 @@ def get_time_slot():
     return "오전 10시" if hour < 13 else "오후 3시"
 
 def get_naver_themes():
-    import urllib.request as ur
     results = []
     try:
-        req = ur.Request("https://finance.naver.com/sise/theme.naver", headers=WEB_HEADERS)
-        with ur.urlopen(req, timeout=10) as res:
-            html = res.read().decode("euc-kr", errors="replace")
-        soup = BeautifulSoup(html, "html.parser")
+        res = requests.get("https://finance.naver.com/sise/theme.naver", headers=WEB_HEADERS, timeout=10)
+        res.encoding = "euc-kr"
+        soup = BeautifulSoup(res.text, "html.parser")
         table = soup.select_one("table.type_1")
         if not table:
             return []
@@ -77,11 +85,9 @@ def get_theme_stocks(link, top_n=5):
     if not link:
         return "-"
     try:
-        import urllib.request as ur
-        req = ur.Request(f"https://finance.naver.com{link}", headers=WEB_HEADERS)
-        with ur.urlopen(req, timeout=10) as res:
-            html = res.read().decode("euc-kr", errors="replace")
-        soup = BeautifulSoup(html, "html.parser")
+        res = requests.get(f"https://finance.naver.com{link}", headers=WEB_HEADERS, timeout=10)
+        res.encoding = "euc-kr"
+        soup = BeautifulSoup(res.text, "html.parser")
         stocks = []
         for row in soup.select("table.type_1 tr"):
             cols = row.select("td")
@@ -100,12 +106,12 @@ def get_theme_stocks(link, top_n=5):
         return "-"
 
 def notion_query(db_id, label):
-    res = notion_request("POST", f"/v1/databases/{db_id}/query",
+    res = notion_curl("POST", f"/v1/databases/{db_id}/query",
         {"filter": {"property": "날짜", "rich_text": {"equals": label}}})
     return res.get("results", [])
 
 def notion_delete(page_id):
-    notion_request("PATCH", f"/v1/pages/{page_id}", {"archived": True})
+    notion_curl("PATCH", f"/v1/pages/{page_id}", {"archived": True})
 
 def notion_send(db_id, label, rank, theme, stocks_str, tag):
     props = {
@@ -117,9 +123,9 @@ def notion_send(db_id, label, rank, theme, stocks_str, tag):
         "구성종목":    {"rich_text": [{"text": {"content": stocks_str}}]},
         "구분":        {"select":    {"name": tag}},
     }
-    res = notion_request("POST", "/v1/pages", {"parent": {"database_id": db_id}, "properties": props})
-    if not res:
-        print(f"  [{rank}위] 전송 실패")
+    res = notion_curl("POST", "/v1/pages", {"parent": {"database_id": db_id}, "properties": props})
+    if res.get("object") == "error":
+        print(f"  노션 오류: {res.get('message', '')}")
 
 def main():
     now   = datetime.now()
