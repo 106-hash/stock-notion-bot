@@ -4,7 +4,8 @@
 
 import os
 import json
-import requests
+import urllib.request
+import urllib.parse
 import time
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -12,26 +13,37 @@ from bs4 import BeautifulSoup
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
 THEME_DB_ID  = os.environ.get("NOTION_THEME_DB_ID", "")
 
-NOTION_HEADERS = {
-    "Authorization": f"Bearer {NOTION_TOKEN}",
-    "Notion-Version": "2022-06-28",
-}
-
 WEB_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
 }
+
+def notion_request(method, path, payload=None):
+    """urllib로 노션 API 호출 (한글 인코딩 문제 우회)"""
+    url = f"https://api.notion.com{path}"
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload else None
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header("Authorization", f"Bearer {NOTION_TOKEN}")
+    req.add_header("Notion-Version", "2022-06-28")
+    req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as res:
+            return json.loads(res.read().decode("utf-8"))
+    except Exception as e:
+        print(f"  API 오류: {e}")
+        return {}
 
 def get_time_slot():
     hour = (datetime.utcnow().hour + 9) % 24
     return "오전 10시" if hour < 13 else "오후 3시"
 
 def get_naver_themes():
-    url = "https://finance.naver.com/sise/theme.naver"
+    import urllib.request as ur
     results = []
     try:
-        res = requests.get(url, headers=WEB_HEADERS, timeout=10)
-        res.encoding = "euc-kr"
-        soup = BeautifulSoup(res.text, "html.parser")
+        req = ur.Request("https://finance.naver.com/sise/theme.naver", headers=WEB_HEADERS)
+        with ur.urlopen(req, timeout=10) as res:
+            html = res.read().decode("euc-kr", errors="replace")
+        soup = BeautifulSoup(html, "html.parser")
         table = soup.select_one("table.type_1")
         if not table:
             return []
@@ -65,9 +77,11 @@ def get_theme_stocks(link, top_n=5):
     if not link:
         return "-"
     try:
-        res = requests.get(f"https://finance.naver.com{link}", headers=WEB_HEADERS, timeout=10)
-        res.encoding = "euc-kr"
-        soup = BeautifulSoup(res.text, "html.parser")
+        import urllib.request as ur
+        req = ur.Request(f"https://finance.naver.com{link}", headers=WEB_HEADERS)
+        with ur.urlopen(req, timeout=10) as res:
+            html = res.read().decode("euc-kr", errors="replace")
+        soup = BeautifulSoup(html, "html.parser")
         stocks = []
         for row in soup.select("table.type_1 tr"):
             cols = row.select("td")
@@ -85,6 +99,14 @@ def get_theme_stocks(link, top_n=5):
     except:
         return "-"
 
+def notion_query(db_id, label):
+    res = notion_request("POST", f"/v1/databases/{db_id}/query",
+        {"filter": {"property": "날짜", "rich_text": {"equals": label}}})
+    return res.get("results", [])
+
+def notion_delete(page_id):
+    notion_request("PATCH", f"/v1/pages/{page_id}", {"archived": True})
+
 def notion_send(db_id, label, rank, theme, stocks_str, tag):
     props = {
         "테마명":      {"title":     [{"text": {"content": theme["theme"]}}]},
@@ -95,34 +117,9 @@ def notion_send(db_id, label, rank, theme, stocks_str, tag):
         "구성종목":    {"rich_text": [{"text": {"content": stocks_str}}]},
         "구분":        {"select":    {"name": tag}},
     }
-    payload = {"parent": {"database_id": db_id}, "properties": props}
-    # ensure_ascii=False + utf-8 인코딩으로 한글 처리
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    headers = {**NOTION_HEADERS, "Content-Type": "application/json; charset=utf-8"}
-    try:
-        res = requests.post("https://api.notion.com/v1/pages", headers=headers, data=body, timeout=10)
-        if res.status_code not in (200, 201):
-            print(f"  노션 오류 {res.status_code}: {res.text[:100]}")
-    except Exception as e:
-        print(f"  전송 실패: {e}")
-
-def notion_query(db_id, label):
-    payload = {"filter": {"property": "날짜", "rich_text": {"equals": label}}}
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    headers = {**NOTION_HEADERS, "Content-Type": "application/json; charset=utf-8"}
-    try:
-        res = requests.post(f"https://api.notion.com/v1/databases/{db_id}/query", headers=headers, data=body, timeout=10)
-        return res.json().get("results", [])
-    except:
-        return []
-
-def notion_delete(page_id):
-    body = json.dumps({"archived": True}, ensure_ascii=False).encode("utf-8")
-    headers = {**NOTION_HEADERS, "Content-Type": "application/json; charset=utf-8"}
-    try:
-        requests.patch(f"https://api.notion.com/v1/pages/{page_id}", headers=headers, data=body, timeout=10)
-    except:
-        pass
+    res = notion_request("POST", "/v1/pages", {"parent": {"database_id": db_id}, "properties": props})
+    if not res:
+        print(f"  [{rank}위] 전송 실패")
 
 def main():
     now   = datetime.now()
@@ -143,7 +140,7 @@ def main():
         notion_delete(page["id"])
 
     for rank, theme in enumerate(themes[:15], 1):
-        print(f"  [{rank}위] {theme['theme']} {theme['change_pct']:+.2f}% | {theme['trade_value']}")
+        print(f"  [{rank}위] {theme['theme']} {theme['change_pct']:+.2f}%")
         stocks_str = get_theme_stocks(theme["link"], top_n=5)
         notion_send(THEME_DB_ID, label, rank, theme, stocks_str, "일간")
         time.sleep(0.5)
