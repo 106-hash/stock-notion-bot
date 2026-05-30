@@ -1,3 +1,4 @@
 pykrx
 pandas
 requests
+beautifulsoup4
