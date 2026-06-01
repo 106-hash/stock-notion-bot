@@ -1,6 +1,5 @@
 """
 네이버 금융 테마 → 노션 자동 업데이트
-curl 방식으로 한글 인코딩 문제 완전 우회
 """
 
 import os
@@ -19,10 +18,8 @@ WEB_HEADERS = {
 }
 
 def notion_curl(method, path, payload=None):
-    """curl 명령어로 노션 API 호출 - 인코딩 문제 완전 우회"""
     url = f"https://api.notion.com{path}"
     body = json.dumps(payload, ensure_ascii=False) if payload else "{}"
-
     cmd = [
         "curl", "-s", "-X", method, url,
         "-H", f"Authorization: Bearer {NOTION_TOKEN}",
@@ -31,12 +28,7 @@ def notion_curl(method, path, payload=None):
         "--data-binary", "@-"
     ]
     try:
-        result = subprocess.run(
-            cmd,
-            input=body.encode("utf-8"),
-            capture_output=True,
-            timeout=15
-        )
+        result = subprocess.run(cmd, input=body.encode("utf-8"), capture_output=True, timeout=15)
         return json.loads(result.stdout.decode("utf-8"))
     except Exception as e:
         print(f"  curl 오류: {e}")
@@ -82,27 +74,45 @@ def get_naver_themes():
     return results
 
 def get_theme_stocks(link, top_n=5):
+    """테마 상세페이지에서 구성종목 + 등락률 수집"""
     if not link:
         return "-"
     try:
         res = requests.get(f"https://finance.naver.com{link}", headers=WEB_HEADERS, timeout=10)
         res.encoding = "euc-kr"
         soup = BeautifulSoup(res.text, "html.parser")
+
         stocks = []
-        for row in soup.select("table.type_1 tr"):
-            cols = row.select("td")
-            if len(cols) < 3:
-                continue
-            try:
-                name   = cols[0].get_text(strip=True)
-                change = cols[2].get_text(strip=True).replace("%","").replace("+","").strip()
-                if name and change and change != "-":
-                    stocks.append((name, float(change)))
-            except:
-                continue
+        # 종목 테이블: class="type_5" 또는 "type_2"
+        for table in soup.select("table.type_5, table.type_2, table"):
+            for row in table.select("tr"):
+                cols = row.select("td")
+                if len(cols) < 2:
+                    continue
+                try:
+                    name = cols[0].get_text(strip=True)
+                    # 등락률 찾기 (% 포함된 셀)
+                    chg_text = ""
+                    for col in cols[1:]:
+                        txt = col.get_text(strip=True)
+                        if "%" in txt:
+                            chg_text = txt
+                            break
+                    if not name or not chg_text:
+                        continue
+                    chg = float(chg_text.replace("%","").replace("+","").replace(",","").replace("▲","").replace("▼","-").strip())
+                    # 종목명 필터: 한글/영문 포함, 너무 길지 않은 것
+                    if 1 < len(name) < 15 and not name.startswith("종목"):
+                        stocks.append((name, chg))
+                except:
+                    continue
+            if stocks:
+                break
+
         stocks.sort(key=lambda x: x[1], reverse=True)
-        return ", ".join([f"{n}({c:+.1f}%)" for n, c in stocks[:top_n]]) or "-"
-    except:
+        top = stocks[:top_n]
+        return ", ".join([f"{n}({c:+.1f}%)" for n, c in top]) if top else "-"
+    except Exception as e:
         return "-"
 
 def notion_query(db_id, label):
@@ -146,8 +156,8 @@ def main():
         notion_delete(page["id"])
 
     for rank, theme in enumerate(themes[:15], 1):
-        print(f"  [{rank}위] {theme['theme']} {theme['change_pct']:+.2f}%")
         stocks_str = get_theme_stocks(theme["link"], top_n=5)
+        print(f"  [{rank}위] {theme['theme']} {theme['change_pct']:+.2f}% | {stocks_str}")
         notion_send(THEME_DB_ID, label, rank, theme, stocks_str, "일간")
         time.sleep(0.5)
 
