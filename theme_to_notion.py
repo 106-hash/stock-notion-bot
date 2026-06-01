@@ -59,10 +59,19 @@ def get_naver_themes():
                     continue
                 change_f = float(change.replace("%","").replace("+","").replace(",","").strip())
                 link = cols[0].select_one("a")
+                # 거래대금 단위 추가 (네이버는 억원 단위)
+                try:
+                    trade_num = float(trade_val.replace(",","").strip())
+                    if trade_num >= 10000:
+                        trade_str = f"{trade_num/10000:.1f}조"
+                    else:
+                        trade_str = f"{trade_num:.0f}억"
+                except:
+                    trade_str = trade_val or "-"
                 results.append({
                     "theme":       name,
                     "change_pct":  round(change_f, 2),
-                    "trade_value": trade_val or "-",
+                    "trade_value": trade_str,
                     "link":        link["href"] if link else "",
                 })
             except:
@@ -83,31 +92,41 @@ def get_theme_stocks(link, top_n=5):
         soup = BeautifulSoup(res.text, "html.parser")
 
         stocks = []
-        # 종목 테이블: class="type_5" 또는 "type_2"
-        for table in soup.select("table.type_5, table.type_2, table"):
+        # type_5 테이블만 탐색 (네이버 종목 리스트 전용 클래스)
+        for table in soup.select("table.type_5"):
             for row in table.select("tr"):
                 cols = row.select("td")
-                if len(cols) < 2:
+                if len(cols) < 4:
                     continue
                 try:
                     name = cols[0].get_text(strip=True)
-                    # 등락률 찾기 (% 포함된 셀)
+                    # 종목명 엄격 필터: 2~10자, 숫자로 시작 안함, 헤더 제외
+                    skip_words = ["종목명", "현재가", "전일비", "등락률", "거래량", "거래대금"]
+                    if not name or name in skip_words:
+                        continue
+                    if not (1 < len(name) <= 10):
+                        continue
+                    if name[0].isdigit():
+                        continue
+
+                    # 등락률은 cols[2] 또는 %가 있는 셀에서 추출
                     chg_text = ""
-                    for col in cols[1:]:
+                    for col in cols[1:5]:
                         txt = col.get_text(strip=True)
-                        if "%" in txt:
+                        if "%" in txt and len(txt) < 10:
                             chg_text = txt
                             break
-                    if not name or not chg_text:
+                    if not chg_text:
                         continue
-                    chg = float(chg_text.replace("%","").replace("+","").replace(",","").replace("▲","").replace("▼","-").strip())
-                    # 종목명 필터: 한글/영문 포함, 너무 길지 않은 것
-                    if 1 < len(name) < 15 and not name.startswith("종목"):
-                        stocks.append((name, chg))
+
+                    chg = float(
+                        chg_text.replace("%","").replace("+","")
+                        .replace(",","").replace("▲","").replace("▼","-")
+                        .replace(" ","").strip()
+                    )
+                    stocks.append((name, chg))
                 except:
                     continue
-            if stocks:
-                break
 
         stocks.sort(key=lambda x: x[1], reverse=True)
         top = stocks[:top_n]
