@@ -6,365 +6,79 @@
 <title>테마 섹터 트래커</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif; background: #f0f2f5; min-height: 100vh; }
+body { font-family: 'Noto Sans KR', sans-serif; background: #0d0f14; height: 100vh; display: flex; flex-direction: column; }
 
-/* 헤더 */
-.header { background: #1a1d27; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
-.header-title { color: #fff; font-size: 16px; font-weight: 700; }
-.header-date { color: #8b8fa8; font-size: 13px; }
+.header {
+  background: #161920;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1f2330;
+  flex-shrink: 0;
+}
+
+.header-left { display: flex; align-items: center; gap: 12px; }
+.logo { font-size: 16px; font-weight: 900; color: #ff4d6d; }
+.date { font-size: 12px; color: #5a6070; background: #1f2330; padding: 3px 10px; border-radius: 6px; }
+
 .tabs { display: flex; gap: 4px; }
-.tab { padding: 6px 16px; border-radius: 20px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit; transition: all 0.2s; background: #2a2d3e; color: #8b8fa8; }
+.tab {
+  padding: 6px 16px; border-radius: 20px; border: none;
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  font-family: inherit; transition: all 0.2s;
+  background: #1f2330; color: #5a6070;
+}
 .tab.active { background: #ff4d6d; color: #fff; }
 
-/* 일간 뷰 */
-.daily-view { padding: 16px; }
-.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.content { flex: 1; overflow: hidden; }
 
-.sector-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-.card-head { padding: 12px 14px 10px; }
-.card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
-.sector-name { font-size: 14px; font-weight: 700; color: #1a1d27; }
-.sector-chg { font-size: 18px; font-weight: 800; color: #ff4d6d; }
-.sector-chg.down { color: #3a9fff; }
-.sector-sub { display: flex; gap: 12px; font-size: 11px; color: #8b8fa8; }
-.rank-badge { background: #fff3f5; color: #ff4d6d; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; }
-.rank-badge.top3 { background: #fff8e6; color: #f59e0b; }
+iframe {
+  width: 100%; height: 100%;
+  border: none;
+  background: #fff;
+}
 
-/* 종목 테이블 */
-.stock-table { width: 100%; border-top: 1px solid #f0f2f5; }
-.stock-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; padding: 6px 14px; border-bottom: 1px solid #f0f2f5; gap: 8px; }
-.stock-row:last-child { border-bottom: none; }
-.stock-name { font-size: 12px; font-weight: 600; color: #2d3048; }
-.stock-chg { font-size: 12px; font-weight: 700; color: #ff4d6d; text-align: right; min-width: 52px; }
-.stock-chg.down { color: #3a9fff; }
-.stock-trade { font-size: 11px; color: #8b8fa8; text-align: right; min-width: 48px; }
-.col-header { display: grid; grid-template-columns: 1fr auto auto; padding: 4px 14px; gap: 8px; background: #f8f9fb; }
-.col-header span { font-size: 10px; color: #aab0c0; font-weight: 600; }
-.col-header span:nth-child(2), .col-header span:nth-child(3) { text-align: right; }
-
-/* 월간 뷰 - 캘린더 */
-.monthly-view { padding: 16px; }
-.month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.month-nav h2 { font-size: 16px; font-weight: 700; color: #1a1d27; }
-.nav-btn { background: #fff; border: 1px solid #e0e4ef; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; color: #1a1d27; }
-
-.calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: #e0e4ef; border-radius: 10px; overflow: hidden; }
-.cal-header { background: #2a2d3e; color: #8b8fa8; text-align: center; padding: 8px 0; font-size: 11px; font-weight: 600; }
-.cal-cell { background: #fff; min-height: 110px; padding: 6px; position: relative; }
-.cal-cell.empty { background: #f8f9fb; }
-.cal-cell.today { background: #fff8f9; }
-.cal-date { font-size: 11px; font-weight: 700; color: #1a1d27; margin-bottom: 4px; }
-.cal-date.today-num { color: #ff4d6d; }
-
-.cal-sector { margin-bottom: 2px; display: flex; align-items: center; gap: 3px; }
-.cal-rank { font-size: 9px; color: #aab0c0; min-width: 10px; }
-.cal-sector-name { font-size: 10px; font-weight: 600; color: #2d3048; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cal-sector-chg { font-size: 10px; font-weight: 700; color: #ff4d6d; }
-.cal-sector-chg.down { color: #3a9fff; }
-.cal-trade { font-size: 9px; color: #aab0c0; }
-
-/* 설정 패널 */
-.config-panel { background: #fff; border-radius: 10px; padding: 16px; margin: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-.config-panel h3 { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #1a1d27; }
-.config-row { margin-bottom: 10px; }
-.config-row label { font-size: 12px; color: #5a6070; margin-bottom: 4px; display: block; }
-.config-row input { width: 100%; padding: 8px 10px; border: 1px solid #e0e4ef; border-radius: 6px; font-size: 12px; font-family: monospace; }
-.config-btn { background: #ff4d6d; color: #fff; border: none; border-radius: 8px; padding: 8px 20px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 4px; font-family: inherit; }
-.config-hint { font-size: 11px; color: #aab0c0; margin-top: 6px; }
-
-.loading { text-align: center; padding: 40px; color: #8b8fa8; font-size: 14px; }
-.no-data { text-align: center; padding: 20px; color: #aab0c0; font-size: 12px; }
+.placeholder {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  height: 100%; color: #5a6070; gap: 12px;
+}
+.placeholder h2 { font-size: 18px; color: #8b8fa8; }
+.placeholder p { font-size: 14px; }
 </style>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
 
 <div class="header">
-  <div>
-    <div class="header-title">📈 테마 섹터 트래커</div>
-    <div class="header-date" id="headerDate"></div>
+  <div class="header-left">
+    <div class="logo">📈 테마 섹터 트래커</div>
+    <div class="date" id="date"></div>
   </div>
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('daily')">일간</button>
-    <button class="tab" onclick="switchTab('monthly')">월간</button>
-    <button class="tab" onclick="switchTab('config')">설정</button>
+    <button class="tab active" onclick="showView('daily')">일간 테마</button>
+    <button class="tab" onclick="showView('notion')">노션 전체보기</button>
   </div>
 </div>
 
-<div id="dailyView" class="daily-view">
-  <div class="loading">설정에서 노션 토큰과 DB ID를 입력해주세요.</div>
-</div>
-
-<div id="monthlyView" class="monthly-view" style="display:none">
-  <div class="month-nav">
-    <button class="nav-btn" onclick="changeMonth(-1)">◀ 이전달</button>
-    <h2 id="monthTitle"></h2>
-    <button class="nav-btn" onclick="changeMonth(1)">다음달 ▶</button>
-  </div>
-  <div class="calendar" id="calendar"></div>
-</div>
-
-<div id="configView" style="display:none">
-  <div class="config-panel">
-    <h3>노션 연동 설정</h3>
-    <div class="config-row">
-      <label>노션 토큰 (ntn_xxx...)</label>
-      <input type="password" id="tokenInput" placeholder="ntn_xxxxxxxx..." />
-    </div>
-    <div class="config-row">
-      <label>테마 DB ID</label>
-      <input type="text" id="dbIdInput" placeholder="32자리 DB ID" />
-    </div>
-    <button class="config-btn" onclick="saveConfig()">저장 후 불러오기</button>
-    <div class="config-hint">* 설정값은 이 브라우저에만 저장됩니다.</div>
-  </div>
+<div class="content" id="content">
+  <iframe
+    src="https://southern-dresser-bdb.notion.site/370b7af2d3c380c8b038c1ddf8aab8ec"
+    id="notionFrame"
+    allowfullscreen>
+  </iframe>
 </div>
 
 <script>
-let NOTION_TOKEN = localStorage.getItem('notion_token') || '';
-let THEME_DB_ID  = localStorage.getItem('theme_db_id') || '';
-let currentTab   = 'daily';
-let currentMonth = new Date();
-let allData      = {};
-
-// 날짜 표시
 const now = new Date();
-document.getElementById('headerDate').textContent =
+document.getElementById('date').textContent =
   `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
 
-function saveConfig() {
-  NOTION_TOKEN = document.getElementById('tokenInput').value.trim();
-  THEME_DB_ID  = document.getElementById('dbIdInput').value.trim();
-  localStorage.setItem('notion_token', NOTION_TOKEN);
-  localStorage.setItem('theme_db_id', THEME_DB_ID);
-  switchTab('daily');
-}
-
-function switchTab(tab) {
-  currentTab = tab;
-  document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', ['daily','monthly','config'][i] === tab);
+function showView(view) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', ['daily','notion'][i] === view);
   });
-  document.getElementById('dailyView').style.display   = tab==='daily'   ? '' : 'none';
-  document.getElementById('monthlyView').style.display = tab==='monthly' ? '' : 'none';
-  document.getElementById('configView').style.display  = tab==='config'  ? '' : 'none';
-
-  if (tab === 'daily')   loadDaily();
-  if (tab === 'monthly') loadMonthly();
-  if (tab === 'config') {
-    document.getElementById('tokenInput').value = NOTION_TOKEN;
-    document.getElementById('dbIdInput').value  = THEME_DB_ID;
-  }
-}
-
-async function notionQuery(filter, sorts) {
-  const res = await fetch(`https://notion-proxy.yoonyeong0672.workers.dev/v1/databases/${THEME_DB_ID}/query`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${NOTION_TOKEN}`,
-      'Notion-Version': '2022-06-28',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ filter, sorts, page_size: 100 }),
-  });
-  const data = await res.json();
-  return data.results || [];
-}
-
-function prop(page, key) {
-  const p = page.properties[key];
-  if (!p) return null;
-  if (p.title)     return p.title[0]?.plain_text || '';
-  if (p.rich_text) return p.rich_text[0]?.plain_text || '';
-  if (p.number !== undefined) return p.number;
-  if (p.select)    return p.select?.name || '';
-  return null;
-}
-
-function parseStocks(txt) {
-  if (!txt || txt === '-') return [];
-  return txt.split(',').map(s => {
-    const m = s.trim().match(/^(.+?)\(([+-]?\d+\.?\d*)%?\)(?:\s*(\d+억?))?$/);
-    if (m) return { name: m[1].trim(), chg: parseFloat(m[2]), trade: m[3] || '' };
-    return null;
-  }).filter(Boolean);
-}
-
-// ─── 일간 뷰 ───
-async function loadDaily() {
-  if (!NOTION_TOKEN || !THEME_DB_ID) {
-    document.getElementById('dailyView').innerHTML = '<div class="loading">설정 탭에서 노션 토큰과 DB ID를 입력해주세요.</div>';
-    return;
-  }
-  document.getElementById('dailyView').innerHTML = '<div class="loading">데이터 불러오는 중...</div>';
-
-  try {
-    const pages = await notionQuery(
-      { property: '구분', select: { equals: '일간' } },
-      [{ property: '날짜', direction: 'descending' }, { property: '순위', direction: 'ascending' }]
-    );
-
-    if (!pages.length) {
-      document.getElementById('dailyView').innerHTML = '<div class="loading">데이터가 없습니다. 평일 오전 10시/오후 3시 이후 확인해주세요.</div>';
-      return;
-    }
-
-    // 최신 날짜 그룹만
-    const latestDate = prop(pages[0], '날짜');
-    const latest = pages.filter(p => prop(p, '날짜') === latestDate);
-
-    let html = `<div style="font-size:12px;color:#8b8fa8;margin-bottom:10px;">기준: ${latestDate}</div>`;
-    html += '<div class="cards-grid">';
-
-    latest.forEach(p => {
-      const name  = prop(p, '테마명') || '-';
-      const rank  = prop(p, '순위') || 0;
-      const chg   = prop(p, '상승률(%)') || 0;
-      const trade = prop(p, '거래대금') || '-';
-      const stockTxt = prop(p, '구성종목') || '-';
-      const stocks = parseStocks(stockTxt);
-      const isUp = chg >= 0;
-
-      html += `
-      <div class="sector-card">
-        <div class="card-head">
-          <div class="card-top">
-            <div>
-              <div class="sector-name">${name}</div>
-              <div class="sector-sub">
-                <span>거래대금 ${trade}</span>
-              </div>
-            </div>
-            <div style="text-align:right">
-              <div class="sector-chg ${isUp?'':'down'}">${isUp?'+':''}${chg.toFixed(2)}%</div>
-              <div class="rank-badge ${rank<=3?'top3':''}">TOP${rank}</div>
-            </div>
-          </div>
-        </div>`;
-
-      if (stocks.length) {
-        html += `
-        <div class="stock-table">
-          <div class="col-header"><span>종목명</span><span>등락률</span><span>거래대금</span></div>`;
-        stocks.forEach(s => {
-          html += `
-          <div class="stock-row">
-            <span class="stock-name">${s.name}</span>
-            <span class="stock-chg ${s.chg<0?'down':''}">${s.chg>=0?'+':''}${s.chg.toFixed(1)}%</span>
-            <span class="stock-trade">${s.trade||'-'}</span>
-          </div>`;
-        });
-        html += `</div>`;
-      }
-      html += `</div>`;
-    });
-
-    html += '</div>';
-    document.getElementById('dailyView').innerHTML = html;
-
-  } catch(e) {
-    document.getElementById('dailyView').innerHTML = `<div class="loading">오류: ${e.message}</div>`;
-  }
-}
-
-// ─── 월간 캘린더 뷰 ───
-async function loadMonthly() {
-  if (!NOTION_TOKEN || !THEME_DB_ID) {
-    document.getElementById('calendar').innerHTML = '<div class="loading" style="grid-column:1/-1">설정 탭에서 토큰을 입력해주세요.</div>';
-    return;
-  }
-
-  const y = currentMonth.getFullYear();
-  const m = currentMonth.getMonth();
-  document.getElementById('monthTitle').textContent = `${y}년 ${m+1}월`;
-
-  try {
-    const pages = await notionQuery(
-      { property: '구분', select: { equals: '일간' } },
-      [{ property: '날짜', direction: 'ascending' }, { property: '순위', direction: 'ascending' }]
-    );
-
-    // 날짜별 그룹 (해당 월만)
-    const byDate = {};
-    pages.forEach(p => {
-      const dateStr = prop(p, '날짜') || '';
-      const dateMatch = dateStr.match(/(\d{4}-\d{2}-\d{2})/);
-      if (!dateMatch) return;
-      const d = dateMatch[1];
-      if (!d.startsWith(`${y}-${String(m+1).padStart(2,'0')}`)) return;
-      if (!byDate[d]) byDate[d] = [];
-      byDate[d].push(p);
-    });
-
-    // 캘린더 렌더
-    const firstDay = new Date(y, m, 1).getDay();
-    const daysInMonth = new Date(y, m+1, 0).getDate();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-
-    let html = '';
-    ['일','월','화','수','목','금','토'].forEach(d => {
-      html += `<div class="cal-header">${d}</div>`;
-    });
-
-    for (let i = 0; i < firstDay; i++) html += `<div class="cal-cell empty"></div>`;
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dStr = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-      const isToday = dStr === todayStr;
-      const sectors = byDate[dStr] || [];
-
-      html += `<div class="cal-cell ${isToday?'today':''}">
-        <div class="cal-date ${isToday?'today-num':''}">${day}</div>`;
-
-      if (sectors.length) {
-        // 최신 슬롯만 (오후3시 우선)
-        const slotMap = {};
-        sectors.forEach(p => {
-          const dateLabel = prop(p, '날짜') || '';
-          const slot = dateLabel.includes('오후') ? 'pm' : 'am';
-          const rank = prop(p, '순위') || 99;
-          if (!slotMap[slot]) slotMap[slot] = [];
-          slotMap[slot].push(p);
-        });
-        const best = slotMap['pm'] || slotMap['am'] || [];
-        const top5 = best.slice(0, 5);
-
-        top5.forEach(p => {
-          const name  = prop(p, '테마명') || '-';
-          const rank  = prop(p, '순위') || 0;
-          const chg   = prop(p, '상승률(%)') || 0;
-          const trade = prop(p, '거래대금') || '';
-          const isUp  = chg >= 0;
-          html += `
-          <div class="cal-sector">
-            <span class="cal-rank">${rank}</span>
-            <span class="cal-sector-name">${name}</span>
-            <span class="cal-sector-chg ${isUp?'':'down'}">${isUp?'+':''}${chg.toFixed(1)}%</span>
-          </div>
-          <div style="font-size:9px;color:#aab0c0;padding-left:13px;margin-bottom:1px;">${trade}</div>`;
-        });
-      } else {
-        html += `<div class="no-data">-</div>`;
-      }
-      html += `</div>`;
-    }
-
-    document.getElementById('calendar').innerHTML = html;
-
-  } catch(e) {
-    document.getElementById('calendar').innerHTML = `<div class="loading" style="grid-column:1/-1">오류: ${e.message}</div>`;
-  }
-}
-
-function changeMonth(delta) {
-  currentMonth.setMonth(currentMonth.getMonth() + delta);
-  loadMonthly();
-}
-
-// 초기 로드
-if (NOTION_TOKEN && THEME_DB_ID) loadDaily();
-else {
-  document.getElementById('dailyView').innerHTML = '<div class="loading">설정 탭에서 노션 토큰과 DB ID를 입력해주세요.</div>';
 }
 </script>
 </body>
