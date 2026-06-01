@@ -1,4 +1,3 @@
-pykrx
-pandas
 requests
 beautifulsoup4
+pandas
