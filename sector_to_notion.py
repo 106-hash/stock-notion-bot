@@ -112,29 +112,17 @@ def get_sector_stocks_and_trade(group_no: int, top_n: int = 5) -> tuple:
         items = []
         total_trade = 0.0
 
-        for idx, s in enumerate(stocks):
+        for s in stocks:
             try:
                 name = s.get("stockName", "")
                 chg_raw = str(s.get("fluctuationsRatio") or "0").replace(",", "").replace("%", "")
                 chg = float(chg_raw) if chg_raw else 0.0
 
-                # 모든 거래대금 관련 필드 시도
-                tv = 0.0
-                for key in ["accumulatedTradingValue", "accumulatedTradingValueRaw", "tradingValue", "tradeAmount"]:
-                    val = s.get(key)
-                    if val and str(val) not in ("0", "", "None"):
-                        tv_raw = str(val).replace(",", "")
-                        try:
-                            tv = float(tv_raw)
-                            break
-                        except:
-                            continue
-
-                # 첫 종목 거래대금 디버그
-                if idx == 0:
-                    print(f"    [거래대금 디버그] accumulatedTradingValue={s.get('accumulatedTradingValue')} Raw={s.get('accumulatedTradingValueRaw')}")
-
+                # Raw 값(순수 숫자)으로 거래대금 합산
+                tv_raw = s.get("accumulatedTradingValueRaw") or 0
+                tv = float(str(tv_raw).replace(",", "")) if tv_raw else 0.0
                 total_trade += tv
+
                 if name and len(items) < top_n:
                     items.append(f"{name}({chg:+.1f}%)")
             except:
