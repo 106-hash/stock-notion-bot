@@ -1,6 +1,6 @@
 """
-네이버 금융 업종 → 노션 자동 업데이트 (KOSPI/KOSDAQ)
-매일 평일 오전 10시, 오후 3시 실행
+한국 주식 업종 섹터 → 노션 자동 업데이트
+pykrx로 실제 업종 코드를 동적으로 가져와서 사용
 """
 
 import os
@@ -8,20 +8,15 @@ import json
 import subprocess
 import time
 from datetime import datetime, timedelta
-from bs4 import BeautifulSoup
-import requests
+from pykrx import stock
 
 NOTION_TOKEN  = os.environ.get("NOTION_TOKEN", "")
 DAILY_DB_ID   = os.environ.get("NOTION_DAILY_DB_ID", "")
 WEEKLY_DB_ID  = os.environ.get("NOTION_WEEKLY_DB_ID", "")
 MONTHLY_DB_ID = os.environ.get("NOTION_MONTHLY_DB_ID", "")
 
-WEB_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
-}
-
 # ─────────────────────────────────────────
-# 노션 API (curl 방식)
+# 노션 API (curl)
 # ─────────────────────────────────────────
 def notion_curl(method, path, payload=None):
     url = f"https://api.notion.com{path}"
@@ -50,116 +45,83 @@ def notion_delete(page_id):
 
 def notion_send(db_id, label, rank, sector, stocks_str, tag):
     props = {
-        "섹터명":      {"title":     [{"text": {"content": sector["sector"]}}]},
-        "날짜":        {"rich_text": [{"text": {"content": label}}]},
-        "순위":        {"number":    rank},
-        "상승률(%)":   {"number":    sector["change_pct"]},
-        "거래대금(억)":{"number":    sector["trade_value_bn"]},
-        "관련종목":    {"rich_text": [{"text": {"content": stocks_str}}]},
-        "구분":        {"select":    {"name": tag}},
+        "섹터명":       {"title":     [{"text": {"content": sector["sector"]}}]},
+        "날짜":         {"rich_text": [{"text": {"content": label}}]},
+        "순위":         {"number":    rank},
+        "상승률(%)":    {"number":    sector["change_pct"]},
+        "거래대금(억)": {"number":    sector["trade_value_bn"]},
+        "관련종목":     {"rich_text": [{"text": {"content": stocks_str}}]},
+        "구분":         {"select":    {"name": tag}},
     }
     res = notion_curl("POST", "/v1/pages", {"parent": {"database_id": db_id}, "properties": props})
     if res.get("object") == "error":
         print(f"  노션 오류: {res.get('message', '')}")
 
 # ─────────────────────────────────────────
-# 네이버 금융 업종 크롤링
+# pykrx 데이터 수집
 # ─────────────────────────────────────────
-def get_naver_sectors(market="KOSPI") -> list:
-    """네이버 금융 업종 시세 크롤링"""
-    # KOSPI: sosok=0, KOSDAQ: sosok=1
-    sosok = "0" if market == "KOSPI" else "1"
-    url = f"https://finance.naver.com/sise/sise_industry.naver?sosok={sosok}"
-    headers = {
-        **WEB_HEADERS,
-        "Referer": "https://finance.naver.com/sise/",
-        "Accept-Language": "ko-KR,ko;q=0.9",
-    }
+def get_recent_trading_date():
+    """가장 최근 거래일 반환"""
+    today = datetime.now()
+    for i in range(7):
+        d = today - timedelta(days=i)
+        if d.weekday() < 5:  # 월~금
+            return d.strftime("%Y%m%d")
+    return today.strftime("%Y%m%d")
+
+def get_sector_data(date_str: str) -> list:
+    """pykrx로 KOSPI + KOSDAQ 업종 데이터 수집"""
     results = []
 
-    try:
-        res = requests.get(url, headers=headers, timeout=10)
-        res.encoding = "euc-kr"
-        soup = BeautifulSoup(res.text, "html.parser")
+    for market in ["KOSPI", "KOSDAQ"]:
+        try:
+            print(f"  [{market}] 업종 코드 조회 중...")
+            tickers = stock.get_index_ticker_list(market=market)
+            print(f"  [{market}] {len(tickers)}개 인덱스 발견")
 
-        table = soup.select_one("table.type_1")
-        if not table:
-            print(f"  [{market}] 테이블 없음 (상태: {res.status_code}, URL: {url})")
-            return []
-
-        for row in table.select("tr"):
-            cols = row.select("td")
-            if len(cols) < 5:
-                continue
-            try:
-                name      = cols[0].get_text(strip=True)
-                change    = cols[1].get_text(strip=True)
-                trade_raw = cols[4].get_text(strip=True).replace(",", "")
-
-                if not name or name in ["업종명", "-"]:
-                    continue
-
-                change_f = float(change.replace("%","").replace("+","").replace(",","").strip())
-
-                # 거래대금: 억원 단위
+            for ticker in tickers:
                 try:
-                    trade_bn = round(float(trade_raw) / 1e8, 1)
-                except:
-                    trade_bn = 0.0
+                    name = stock.get_index_ticker_name(ticker)
+                    df = stock.get_index_ohlcv(date_str, date_str, ticker)
 
-                results.append({
-                    "sector":        f"[{market}] {name}",
-                    "change_pct":    round(change_f, 2),
-                    "trade_value_bn": trade_bn,
-                })
-            except:
-                continue
+                    if df is None or df.empty:
+                        continue
 
-        results.sort(key=lambda x: x["change_pct"], reverse=True)
-        print(f"  [{market}] {len(results)}개 업종 수집")
-        return results
+                    # 컬럼 확인 후 데이터 추출
+                    cols = df.columns.tolist()
+                    row = df.iloc[-1]
 
-    except Exception as e:
-        print(f"  [{market}] 수집 실패: {e}")
-        return []
+                    # 등락률 컬럼 찾기
+                    chg = 0.0
+                    for col in ["등락률", "변동률", "수익률"]:
+                        if col in cols:
+                            chg = float(row[col])
+                            break
 
+                    # 거래대금 컬럼 찾기
+                    trade = 0.0
+                    for col in ["거래대금", "거래량"]:
+                        if col in cols:
+                            val = float(row[col])
+                            trade = round(val / 1e8, 1) if col == "거래대금" else round(val / 1e6, 1)
+                            break
 
-def get_sector_stocks(sector_name: str, market="KOSPI", top_n=5) -> str:
-    """업종 상세 페이지에서 상위 종목 수집"""
-    # 업종명 추출 ([KOSPI] 제거)
-    name = sector_name.replace("[KOSPI] ", "").replace("[KOSDAQ] ", "")
-    mkt_code = "1" if market == "KOSPI" else "2"
+                    results.append({
+                        "sector": f"[{market}] {name}",
+                        "change_pct": round(chg, 2),
+                        "trade_value_bn": trade,
+                    })
+                    time.sleep(0.2)
 
-    try:
-        # 업종 검색
-        url = f"https://finance.naver.com/sise/sise_sector_stock.naver?bizType={mkt_code}&sector={requests.utils.quote(name)}"
-        res = requests.get(url, headers=WEB_HEADERS, timeout=10)
-        res.encoding = "euc-kr"
-        soup = BeautifulSoup(res.text, "html.parser")
-
-        stocks = []
-        for row in soup.select("table.type_2 tr, table.type_5 tr"):
-            cols = row.select("td")
-            if len(cols) < 3:
-                continue
-            try:
-                sname = cols[0].get_text(strip=True)
-                if not sname or len(sname) > 12 or sname in ["종목명"]:
+                except Exception as e:
                     continue
-                for col in cols[1:5]:
-                    txt = col.get_text(strip=True)
-                    if "%" in txt and len(txt) < 10:
-                        chg = float(txt.replace("%","").replace("+","").replace(",","").replace("▲","").replace("▼","-").strip())
-                        stocks.append((sname, chg))
-                        break
-            except:
-                continue
 
-        stocks.sort(key=lambda x: x[1], reverse=True)
-        return ", ".join([f"{n}({c:+.1f}%)" for n, c in stocks[:top_n]]) or "-"
+        except Exception as e:
+            print(f"  [{market}] 실패: {e}")
 
-    except:
-        return "-"
+    results.sort(key=lambda x: x["change_pct"], reverse=True)
+    print(f"  총 {len(results)}개 업종 수집 완료")
+    return results
 
 # ─────────────────────────────────────────
 # 날짜 유틸
@@ -175,46 +137,41 @@ def get_week_label():
 def get_month_label():
     return datetime.now().strftime("%Y-%m")
 
-def clear_and_upload(db_id, label, sectors, tag, with_stocks):
+def clear_and_upload(db_id, label, sectors, tag):
     for page in notion_query(db_id, label):
         notion_delete(page["id"])
     for rank, s in enumerate(sectors[:10], 1):
-        market = "KOSPI" if "KOSPI" in s["sector"] else "KOSDAQ"
-        stocks_str = get_sector_stocks(s["sector"], market) if with_stocks else "-"
         print(f"  [{rank}위] {s['sector']} {s['change_pct']:+.2f}% | {s['trade_value_bn']}억")
-        notion_send(db_id, label, rank, s, stocks_str, tag)
+        notion_send(db_id, label, rank, s, "-", tag)
         time.sleep(0.4)
 
 # ─────────────────────────────────────────
 # 메인
 # ─────────────────────────────────────────
 def main():
-    now   = datetime.now()
-    today = now.strftime("%Y%m%d")
-    slot  = get_time_slot()
+    now    = datetime.now()
+    today  = get_recent_trading_date()
+    slot   = get_time_slot()
     d_label = f"{today[:4]}-{today[4:6]}-{today[6:]} ({slot})"
     w_label = get_week_label()
     m_label = get_month_label()
 
     print(f"\n오늘: {today} / 슬롯: {slot}")
 
-    # KOSPI + KOSDAQ 합산
-    kospi  = get_naver_sectors("KOSPI")
-    kosdaq = get_naver_sectors("KOSDAQ")
-    all_sectors = sorted(kospi + kosdaq, key=lambda x: x["change_pct"], reverse=True)
+    sectors = get_sector_data(today)
 
-    if not all_sectors:
+    if not sectors:
         print("업종 데이터 없음. 종료.")
         return
 
     print(f"\n{'='*50}\n[일간] {d_label}\n{'='*50}")
-    clear_and_upload(DAILY_DB_ID, d_label, all_sectors, "일간", True)
+    clear_and_upload(DAILY_DB_ID, d_label, sectors, "일간")
 
     print(f"\n{'='*50}\n[주간] {w_label}\n{'='*50}")
-    clear_and_upload(WEEKLY_DB_ID, w_label, all_sectors, "주간", False)
+    clear_and_upload(WEEKLY_DB_ID, w_label, sectors, "주간")
 
     print(f"\n{'='*50}\n[월간] {m_label}\n{'='*50}")
-    clear_and_upload(MONTHLY_DB_ID, m_label, all_sectors, "월간", False)
+    clear_and_upload(MONTHLY_DB_ID, m_label, sectors, "월간")
 
     print("\n✅ 완료!")
 
