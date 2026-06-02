@@ -156,6 +156,38 @@ def notion_send(db_id, label, rank, theme, stocks_str, tag):
     if res.get("object") == "error":
         print(f"  노션 오류: {res.get('message', '')}")
 
+def cleanup_old_data(db_id: str, keep_days: int = 5):
+    """오래된 테마 데이터 삭제 (최근 5일치 유지)"""
+    try:
+        res = notion_curl("POST", f"/v1/databases/{db_id}/query", {"page_size": 100})
+        pages = res.get("results", [])
+        if not pages:
+            return
+
+        labels = set()
+        for p in pages:
+            label = p["properties"].get("날짜", {}).get("rich_text", [{}])
+            if label:
+                labels.add(label[0].get("plain_text", ""))
+
+        dates = sorted(set([l[:10] for l in labels if l]), reverse=True)
+        keep_dates = set(dates[:keep_days])
+        delete_count = 0
+
+        for p in pages:
+            label = p["properties"].get("날짜", {}).get("rich_text", [{}])
+            if label:
+                lbl = label[0].get("plain_text", "")
+                if lbl[:10] not in keep_dates:
+                    notion_delete(p["id"])
+                    delete_count += 1
+                    time.sleep(0.2)
+
+        if delete_count:
+            print(f"  {delete_count}개 오래된 데이터 삭제 완료")
+    except Exception as e:
+        print(f"  삭제 중 오류: {e}")
+
 def main():
     now   = datetime.now()
     today = now.strftime("%Y%m%d")
@@ -180,6 +212,7 @@ def main():
         notion_send(THEME_DB_ID, label, rank, theme, stocks_str, "일간")
         time.sleep(0.5)
 
+    cleanup_old_data(THEME_DB_ID, keep_days=5)
     print(f"\n✅ 완료! 15개 테마 업데이트")
 
 if __name__ == "__main__":
