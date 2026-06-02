@@ -21,6 +21,13 @@ HEADERS = {
 }
 
 # ─────────────────────────────────────────
+# 유틸
+# ─────────────────────────────────────────
+def format_trade(trade_bn: float) -> str:
+    """거래대금 쉼표 포맷 (예: 1554.5 → 1,554.5)"""
+    return f"{trade_bn:,.1f}"
+
+# ─────────────────────────────────────────
 # 노션 API
 # ─────────────────────────────────────────
 def notion_curl(method, path, payload=None):
@@ -117,12 +124,9 @@ def get_sector_stocks_and_trade(group_no: int, top_n: int = 5) -> tuple:
                 name = s.get("stockName", "")
                 chg_raw = str(s.get("fluctuationsRatio") or "0").replace(",", "").replace("%", "")
                 chg = float(chg_raw) if chg_raw else 0.0
-
-                # Raw 값(순수 숫자)으로 거래대금 합산
                 tv_raw = s.get("accumulatedTradingValueRaw") or 0
                 tv = float(str(tv_raw).replace(",", "")) if tv_raw else 0.0
                 total_trade += tv
-
                 if name and len(items) < top_n:
                     items.append(f"{name}({chg:+.1f}%)")
             except:
@@ -131,27 +135,20 @@ def get_sector_stocks_and_trade(group_no: int, top_n: int = 5) -> tuple:
         stocks_str = ", ".join(items) if items else "-"
         trade_bn   = round(total_trade / 1e8, 1)
         return stocks_str, trade_bn
-
-# 거래대금 쉼표 포맷
-def format_trade(trade_bn: float) -> str:
-    return f"{trade_bn:,.1f}"
     except Exception as e:
-        print(f"    [종목API 오류] {e}")
+        print(f"  종목 오류: {e}")
         return "-", 0.0
 
 # ─────────────────────────────────────────
 # 오래된 데이터 삭제
 # ─────────────────────────────────────────
 def cleanup_old_data(db_id: str, keep_days: int = None, keep_weeks: int = None, keep_months: int = None):
-    """오래된 노션 데이터 삭제"""
     try:
-        # 전체 페이지 가져오기
         res = notion_curl("POST", f"/v1/databases/{db_id}/query", {"page_size": 100})
         pages = res.get("results", [])
         if not pages:
             return
 
-        # 날짜 라벨 수집 (중복 제거)
         labels = set()
         for p in pages:
             label = p["properties"].get("날짜", {}).get("rich_text", [{}])
@@ -159,27 +156,19 @@ def cleanup_old_data(db_id: str, keep_days: int = None, keep_weeks: int = None, 
                 labels.add(label[0].get("plain_text", ""))
         labels = sorted([l for l in labels if l], reverse=True)
 
-        # 보관할 라벨 결정
         if keep_days:
-            # 날짜 기준 (YYYY-MM-DD 형태)
             dates = sorted(set([l[:10] for l in labels]), reverse=True)
             keep_dates = set(dates[:keep_days])
-            delete_labels = [l for l in labels if l[:10] not in keep_dates]
+            delete_labels = set([l for l in labels if l[:10] not in keep_dates])
         elif keep_weeks:
-            # 주차 기준 (YYYY-Wxx 형태)
             keep_labels = set(labels[:keep_weeks])
-            delete_labels = [l for l in labels if l not in keep_labels]
+            delete_labels = set([l for l in labels if l not in keep_labels])
         elif keep_months:
-            # 월 기준 (YYYY-MM 형태)
             keep_labels = set(labels[:keep_months])
-            delete_labels = [l for l in labels if l not in keep_labels]
+            delete_labels = set([l for l in labels if l not in keep_labels])
         else:
             return
 
-        if not delete_labels:
-            return
-
-        # 삭제할 페이지 찾아서 삭제
         delete_count = 0
         for p in pages:
             label = p["properties"].get("날짜", {}).get("rich_text", [{}])
@@ -190,9 +179,8 @@ def cleanup_old_data(db_id: str, keep_days: int = None, keep_weeks: int = None, 
 
         if delete_count:
             print(f"  {delete_count}개 오래된 데이터 삭제 완료")
-
     except Exception as e:
-        print(f"  삭제 중 오류: {e}")
+        print(f"  삭제 오류: {e}")
 
 # ─────────────────────────────────────────
 # 날짜 유틸
@@ -213,11 +201,10 @@ def clear_and_upload(db_id, label, sectors, tag, with_stocks=False):
         notion_delete(page["id"])
     for rank, s in enumerate(sectors[:10], 1):
         if with_stocks:
-            gno = s.get("group_no", 0)
-            stocks_str, trade_bn = get_sector_stocks_and_trade(gno)
+            stocks_str, trade_bn = get_sector_stocks_and_trade(s.get("group_no", 0))
             s["stocks"] = stocks_str
             s["trade_value_bn"] = trade_bn
-        print(f"  [{rank}위] {s['sector']} {s['change_pct']:+.2f}% | {s['trade_value_bn']}억 | {s.get('stocks', '-')}")
+        print(f"  [{rank}위] {s['sector']} {s['change_pct']:+.2f}% | {format_trade(s['trade_value_bn'])}억 | {s.get('stocks', '-')}")
         notion_send(db_id, label, rank, s, tag)
         time.sleep(0.5)
 
@@ -240,12 +227,15 @@ def main():
 
     print(f"\n{'='*50}\n[일간] {d_label}\n{'='*50}")
     clear_and_upload(DAILY_DB_ID, d_label, sectors, "일간", with_stocks=True)
+    cleanup_old_data(DAILY_DB_ID, keep_days=5)
 
     print(f"\n{'='*50}\n[주간] {w_label}\n{'='*50}")
     clear_and_upload(WEEKLY_DB_ID, w_label, sectors, "주간")
+    cleanup_old_data(WEEKLY_DB_ID, keep_weeks=4)
 
     print(f"\n{'='*50}\n[월간] {m_label}\n{'='*50}")
     clear_and_upload(MONTHLY_DB_ID, m_label, sectors, "월간")
+    cleanup_old_data(MONTHLY_DB_ID, keep_months=3)
 
     print("\n✅ 완료!")
 
