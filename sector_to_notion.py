@@ -53,7 +53,7 @@ def notion_send(db_id, label, rank, sector, tag):
         "섹터명":       {"title":     [{"text": {"content": sector["sector"]}}]},
         "날짜":         {"rich_text": [{"text": {"content": label}}]},
         "순위":         {"number":    rank},
-        "상승률(%)":    {"number":    sector["change_pct"]},
+        "상승률":    {"number":    sector["change_pct"]},
         "거래대금(억)": {"number":    sector["trade_value_bn"]},
         "관련종목":     {"rich_text": [{"text": {"content": "-"}}]},
         "구분":         {"select":    {"name": tag}},
@@ -84,10 +84,22 @@ def get_all_sectors() -> list:
 
         for group in groups:
             try:
-                name     = group.get("name", "")
-                chg      = float(group.get("changeRate", 0))
-                trade    = float(group.get("tradingValue", 0))
+                name  = group.get("name", "")
+                chg   = float(group.get("changeRate", 0))
+
+                # 거래대금 필드 탐색
+                trade_raw = (
+                    group.get("tradingValue") or
+                    group.get("accumulatedTradingValue") or
+                    group.get("accTradingValue") or
+                    group.get("tradePrice") or 0
+                )
+                trade    = float(trade_raw)
                 trade_bn = round(trade / 1e8, 1)
+
+                # 디버그: 첫 번째 항목 필드 출력
+                if name == groups[0].get("name", ""):
+                    print(f"  [디버그] 첫 항목 키: {list(group.keys())}")
 
                 if not name:
                     continue
