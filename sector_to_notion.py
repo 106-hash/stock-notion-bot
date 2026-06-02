@@ -108,35 +108,21 @@ def get_sector_stocks_and_trade(group_no: int, top_n: int = 5) -> tuple:
             print(f"    [종목API] {res.status_code} group_no={group_no}")
             return "-", 0.0
         data = res.json()
-        stocks = data.get("stocks") or data.get("items") or (data if isinstance(data, list) else [])
-        # 첫 번째 종목 구조 출력
-        if stocks and not hasattr(get_sector_stocks_and_trade, '_debug_done'):
-            get_sector_stocks_and_trade._debug_done = True
-            first = stocks[0]
-            print(f"    [종목 필드] {list(first.keys())}")
-            print(f"    [종목 샘플] {str(first)[:200]}")
+        stocks = data.get("stocks") or []
 
         items = []
         total_trade = 0.0
 
         for s in stocks:
-            name = s.get("stockName") or s.get("name") or s.get("nm") or ""
-            chg  = float(s.get("fluctuationsRatio") or s.get("changeRate") or s.get("chg") or 0)
-
-            # 거래대금 합산
-            tv = float(
-                s.get("accumulatedTradingValue") or
-                s.get("tradingValue") or
-                s.get("tradeValue") or
-                s.get("accTrdVal") or 0
-            )
+            name = s.get("stockName", "")
+            chg  = float(s.get("fluctuationsRatio") or 0)
+            tv   = float(s.get("accumulatedTradingValue") or s.get("accumulatedTradingValueRaw") or 0)
             total_trade += tv
-
             if name and len(items) < top_n:
                 items.append(f"{name}({chg:+.1f}%)")
 
-        stocks_str  = ", ".join(items) if items else "-"
-        trade_bn    = round(total_trade / 1e8, 1)
+        stocks_str = ", ".join(items) if items else "-"
+        trade_bn   = round(total_trade / 1e8, 1)
         return stocks_str, trade_bn
     except:
         return "-", 0.0
