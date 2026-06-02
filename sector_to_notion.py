@@ -105,8 +105,16 @@ def get_sector_stocks_and_trade(group_no: int, top_n: int = 5) -> tuple:
     try:
         res = requests.get(url, headers=HEADERS, timeout=10)
         if res.status_code != 200:
+            print(f"    [종목API] {res.status_code} group_no={group_no}")
             return "-", 0.0
         data = res.json()
+        # 첫 번째 호출 시 구조 출력
+        if group_no and not hasattr(get_sector_stocks_and_trade, '_debug_done'):
+            get_sector_stocks_and_trade._debug_done = True
+            print(f"    [종목API 구조] type={type(data).__name__}, keys={list(data.keys()) if isinstance(data, dict) else 'list'}")
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    print(f"      {k}: {str(v)[:80]}")
         stocks = data.get("stocks") or data.get("items") or (data if isinstance(data, list) else [])
 
         items = []
