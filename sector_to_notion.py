@@ -54,7 +54,7 @@ def notion_send(db_id, label, rank, sector, tag):
         "날짜":         {"rich_text": [{"text": {"content": label}}]},
         "순위":         {"number":    rank},
         "상승률(%)":    {"number":    sector["change_pct"]},
-        "거래대금(억)": {"number":    sector["trade_value_bn"]},
+        "거래대금(억)": {"rich_text": [{"text": {"content": format_trade(sector["trade_value_bn"])}}]},
         "관련종목":     {"rich_text": [{"text": {"content": sector.get("stocks", "-")}}]},
         "구분":         {"select":    {"name": tag}},
     }
@@ -131,9 +131,68 @@ def get_sector_stocks_and_trade(group_no: int, top_n: int = 5) -> tuple:
         stocks_str = ", ".join(items) if items else "-"
         trade_bn   = round(total_trade / 1e8, 1)
         return stocks_str, trade_bn
+
+# 거래대금 쉼표 포맷
+def format_trade(trade_bn: float) -> str:
+    return f"{trade_bn:,.1f}"
     except Exception as e:
         print(f"    [종목API 오류] {e}")
         return "-", 0.0
+
+# ─────────────────────────────────────────
+# 오래된 데이터 삭제
+# ─────────────────────────────────────────
+def cleanup_old_data(db_id: str, keep_days: int = None, keep_weeks: int = None, keep_months: int = None):
+    """오래된 노션 데이터 삭제"""
+    try:
+        # 전체 페이지 가져오기
+        res = notion_curl("POST", f"/v1/databases/{db_id}/query", {"page_size": 100})
+        pages = res.get("results", [])
+        if not pages:
+            return
+
+        # 날짜 라벨 수집 (중복 제거)
+        labels = set()
+        for p in pages:
+            label = p["properties"].get("날짜", {}).get("rich_text", [{}])
+            if label:
+                labels.add(label[0].get("plain_text", ""))
+        labels = sorted([l for l in labels if l], reverse=True)
+
+        # 보관할 라벨 결정
+        if keep_days:
+            # 날짜 기준 (YYYY-MM-DD 형태)
+            dates = sorted(set([l[:10] for l in labels]), reverse=True)
+            keep_dates = set(dates[:keep_days])
+            delete_labels = [l for l in labels if l[:10] not in keep_dates]
+        elif keep_weeks:
+            # 주차 기준 (YYYY-Wxx 형태)
+            keep_labels = set(labels[:keep_weeks])
+            delete_labels = [l for l in labels if l not in keep_labels]
+        elif keep_months:
+            # 월 기준 (YYYY-MM 형태)
+            keep_labels = set(labels[:keep_months])
+            delete_labels = [l for l in labels if l not in keep_labels]
+        else:
+            return
+
+        if not delete_labels:
+            return
+
+        # 삭제할 페이지 찾아서 삭제
+        delete_count = 0
+        for p in pages:
+            label = p["properties"].get("날짜", {}).get("rich_text", [{}])
+            if label and label[0].get("plain_text", "") in delete_labels:
+                notion_delete(p["id"])
+                delete_count += 1
+                time.sleep(0.2)
+
+        if delete_count:
+            print(f"  {delete_count}개 오래된 데이터 삭제 완료")
+
+    except Exception as e:
+        print(f"  삭제 중 오류: {e}")
 
 # ─────────────────────────────────────────
 # 날짜 유틸
