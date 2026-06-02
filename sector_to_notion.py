@@ -105,7 +105,6 @@ def get_sector_stocks_and_trade(group_no: int, top_n: int = 5) -> tuple:
     try:
         res = requests.get(url, headers=HEADERS, timeout=10)
         if res.status_code != 200:
-            print(f"    [종목API] {res.status_code} group_no={group_no}")
             return "-", 0.0
         data = res.json()
         stocks = data.get("stocks") or []
@@ -114,17 +113,26 @@ def get_sector_stocks_and_trade(group_no: int, top_n: int = 5) -> tuple:
         total_trade = 0.0
 
         for s in stocks:
-            name = s.get("stockName", "")
-            chg  = float(s.get("fluctuationsRatio") or 0)
-            tv   = float(s.get("accumulatedTradingValue") or s.get("accumulatedTradingValueRaw") or 0)
-            total_trade += tv
-            if name and len(items) < top_n:
-                items.append(f"{name}({chg:+.1f}%)")
+            try:
+                name = s.get("stockName", "")
+                # 쉼표 제거 후 변환
+                chg_raw = str(s.get("fluctuationsRatio") or "0").replace(",", "").replace("%", "")
+                chg = float(chg_raw) if chg_raw else 0.0
+
+                tv_raw = str(s.get("accumulatedTradingValue") or s.get("accumulatedTradingValueRaw") or "0").replace(",", "")
+                tv = float(tv_raw) if tv_raw else 0.0
+                total_trade += tv
+
+                if name and len(items) < top_n:
+                    items.append(f"{name}({chg:+.1f}%)")
+            except:
+                continue
 
         stocks_str = ", ".join(items) if items else "-"
         trade_bn   = round(total_trade / 1e8, 1)
         return stocks_str, trade_bn
-    except:
+    except Exception as e:
+        print(f"    [종목API 오류] {e}")
         return "-", 0.0
 
 # ─────────────────────────────────────────
@@ -147,7 +155,6 @@ def clear_and_upload(db_id, label, sectors, tag, with_stocks=False):
     for rank, s in enumerate(sectors[:10], 1):
         if with_stocks:
             gno = s.get("group_no", 0)
-            print(f"  group_no={gno}")
             stocks_str, trade_bn = get_sector_stocks_and_trade(gno)
             s["stocks"] = stocks_str
             s["trade_value_bn"] = trade_bn
