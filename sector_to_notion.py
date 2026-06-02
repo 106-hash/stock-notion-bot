@@ -67,8 +67,9 @@ def notion_send(db_id, label, rank, sector, stocks_str, tag):
 # ─────────────────────────────────────────
 def get_naver_sectors(market="KOSPI") -> list:
     """네이버 금융 업종 시세 크롤링"""
-    mkt_code = "0" if market == "KOSPI" else "1"
-    url = "https://finance.naver.com/sise/sise_sector.naver"
+    # KOSPI: sosok=0, KOSDAQ: sosok=1
+    sosok = "0" if market == "KOSPI" else "1"
+    url = f"https://finance.naver.com/sise/sise_industry.naver?sosok={sosok}"
     headers = {
         **WEB_HEADERS,
         "Referer": "https://finance.naver.com/sise/",
@@ -77,13 +78,13 @@ def get_naver_sectors(market="KOSPI") -> list:
     results = []
 
     try:
-        res = requests.get(url, headers=headers, timeout=10, params={"bizType": mkt_code})
+        res = requests.get(url, headers=headers, timeout=10)
         res.encoding = "euc-kr"
         soup = BeautifulSoup(res.text, "html.parser")
 
         table = soup.select_one("table.type_1")
         if not table:
-            print(f"  [{market}] 테이블 없음 (상태: {res.status_code})")
+            print(f"  [{market}] 테이블 없음 (상태: {res.status_code}, URL: {url})")
             return []
 
         for row in table.select("tr"):
@@ -165,7 +166,7 @@ def get_sector_stocks(sector_name: str, market="KOSPI", top_n=5) -> str:
 # ─────────────────────────────────────────
 def get_time_slot():
     hour = (datetime.utcnow().hour + 9) % 24
-    return "낮 12시" if hour < 15 else "오후 3시"
+    return "오전 10시" if hour < 13 else "오후 3시"
 
 def get_week_label():
     now = datetime.now()
