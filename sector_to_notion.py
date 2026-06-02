@@ -97,27 +97,42 @@ def get_all_sectors() -> list:
     return results
 
 
-def get_sector_stocks(group_no: int, top_n: int = 5) -> str:
-    """업종 번호로 상위 종목 가져오기"""
+def get_sector_stocks_and_trade(group_no: int, top_n: int = 5) -> tuple:
+    """업종 번호로 상위 종목 + 거래대금 합산"""
     if not group_no:
-        return "-"
+        return "-", 0.0
     url = f"https://m.stock.naver.com/api/stocks/industry/{group_no}"
     try:
         res = requests.get(url, headers=HEADERS, timeout=10)
         if res.status_code != 200:
-            return "-"
+            return "-", 0.0
         data = res.json()
-        # 응답 구조 탐색
         stocks = data.get("stocks") or data.get("items") or (data if isinstance(data, list) else [])
+
         items = []
-        for s in stocks[:top_n]:
+        total_trade = 0.0
+
+        for s in stocks:
             name = s.get("stockName") or s.get("name") or s.get("nm") or ""
             chg  = float(s.get("fluctuationsRatio") or s.get("changeRate") or s.get("chg") or 0)
-            if name:
+
+            # 거래대금 합산
+            tv = float(
+                s.get("accumulatedTradingValue") or
+                s.get("tradingValue") or
+                s.get("tradeValue") or
+                s.get("accTrdVal") or 0
+            )
+            total_trade += tv
+
+            if name and len(items) < top_n:
                 items.append(f"{name}({chg:+.1f}%)")
-        return ", ".join(items) if items else "-"
+
+        stocks_str  = ", ".join(items) if items else "-"
+        trade_bn    = round(total_trade / 1e8, 1)
+        return stocks_str, trade_bn
     except:
-        return "-"
+        return "-", 0.0
 
 # ─────────────────────────────────────────
 # 날짜 유틸
@@ -138,8 +153,10 @@ def clear_and_upload(db_id, label, sectors, tag, with_stocks=False):
         notion_delete(page["id"])
     for rank, s in enumerate(sectors[:10], 1):
         if with_stocks:
-            s["stocks"] = get_sector_stocks(s.get("group_no", 0))
-        print(f"  [{rank}위] {s['sector']} {s['change_pct']:+.2f}% | {s.get('stocks', '-')}")
+            stocks_str, trade_bn = get_sector_stocks_and_trade(s.get("group_no", 0))
+            s["stocks"] = stocks_str
+            s["trade_value_bn"] = trade_bn
+        print(f"  [{rank}위] {s['sector']} {s['change_pct']:+.2f}% | {s['trade_value_bn']}억 | {s.get('stocks', '-')}")
         notion_send(db_id, label, rank, s, tag)
         time.sleep(0.5)
 
