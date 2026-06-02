@@ -146,7 +146,9 @@ def clear_and_upload(db_id, label, sectors, tag, with_stocks=False):
         notion_delete(page["id"])
     for rank, s in enumerate(sectors[:10], 1):
         if with_stocks:
-            stocks_str, trade_bn = get_sector_stocks_and_trade(s.get("group_no", 0))
+            gno = s.get("group_no", 0)
+            print(f"  group_no={gno}")
+            stocks_str, trade_bn = get_sector_stocks_and_trade(gno)
             s["stocks"] = stocks_str
             s["trade_value_bn"] = trade_bn
         print(f"  [{rank}위] {s['sector']} {s['change_pct']:+.2f}% | {s['trade_value_bn']}억 | {s.get('stocks', '-')}")
