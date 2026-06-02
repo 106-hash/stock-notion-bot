@@ -65,51 +65,47 @@ def notion_send(db_id, label, rank, sector, tag):
 # ─────────────────────────────────────────
 # 네이버 모바일 API로 업종 데이터 수집
 # ─────────────────────────────────────────
-def get_sectors_from_naver(market="KOSPI") -> list:
-    mkt = "kospi" if market == "KOSPI" else "kosdaq"
-    # 네이버 모바일 업종 API
-    url = f"https://m.stock.naver.com/api/stock/{mkt}/group"
+def get_all_sectors() -> list:
+    """네이버 모바일 API로 전체 업종 수집"""
+    url = "https://m.stock.naver.com/api/stocks/industry"
     results = []
 
     try:
         res = requests.get(url, headers=HEADERS, timeout=10)
-        print(f"  [{market}] 상태: {res.status_code} URL: {url}")
+        print(f"  상태: {res.status_code}")
 
         if res.status_code != 200:
+            print(f"  실패: {res.status_code}")
             return []
 
         data = res.json()
-        items = data if isinstance(data, list) else data.get("result", data.get("data", []))
+        groups = data.get("groups", [])
+        print(f"  {len(groups)}개 업종 발견")
 
-        for item in items:
+        for group in groups:
             try:
-                name  = item.get("groupName") or item.get("name") or item.get("nm", "")
-                chg   = float(item.get("fluctuationsRatio") or item.get("changeRate") or item.get("chg", 0))
-                trade = float(item.get("tradingValue") or item.get("accTradeValue") or item.get("trval", 0))
+                name     = group.get("name", "")
+                chg      = float(group.get("changeRate", 0))
+                trade    = float(group.get("tradingValue", 0))
                 trade_bn = round(trade / 1e8, 1)
 
-                if name:
-                    results.append({
-                        "sector":         f"[{market}] {name}",
-                        "change_pct":     round(chg, 2),
-                        "trade_value_bn": trade_bn,
-                    })
+                if not name:
+                    continue
+
+                results.append({
+                    "sector":         name,
+                    "change_pct":     round(chg, 2),
+                    "trade_value_bn": trade_bn,
+                })
             except:
                 continue
 
-        print(f"  [{market}] {len(results)}개 수집")
     except Exception as e:
-        print(f"  [{market}] 실패: {e}")
+        print(f"  실패: {e}")
 
+    results.sort(key=lambda x: x["change_pct"], reverse=True)
+    print(f"  총 {len(results)}개 업종 수집 완료")
     return results
-
-def get_all_sectors() -> list:
-    kospi  = get_sectors_from_naver("KOSPI")
-    time.sleep(0.5)
-    kosdaq = get_sectors_from_naver("KOSDAQ")
-    all_s  = sorted(kospi + kosdaq, key=lambda x: x["change_pct"], reverse=True)
-    print(f"\n  총 {len(all_s)}개 업종 수집 완료")
-    return all_s
 
 # ─────────────────────────────────────────
 # 날짜 유틸
