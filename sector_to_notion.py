@@ -84,22 +84,13 @@ def get_all_sectors() -> list:
 
         for group in groups:
             try:
-                name  = group.get("name", "")
-                chg   = float(group.get("changeRate", 0))
-
-                # 거래대금 필드 탐색
-                trade_raw = (
-                    group.get("tradingValue") or
-                    group.get("accumulatedTradingValue") or
-                    group.get("accTradingValue") or
-                    group.get("tradePrice") or 0
-                )
-                trade    = float(trade_raw)
-                trade_bn = round(trade / 1e8, 1)
-
-                # 디버그: 첫 번째 항목 필드 출력
-                if name == groups[0].get("name", ""):
-                    print(f"  [디버그] 첫 항목 키: {list(group.keys())}")
+                name     = group.get("name", "")
+                chg      = float(group.get("changeRate", 0))
+                rise     = group.get("riseCount", 0)
+                fall     = group.get("fallCount", 0)
+                total    = group.get("totalCount", 0)
+                # 거래대금 없으므로 상승/하락 종목수로 대체 표시
+                trade_bn = 0.0
 
                 if not name:
                     continue
@@ -108,6 +99,7 @@ def get_all_sectors() -> list:
                     "sector":         name,
                     "change_pct":     round(chg, 2),
                     "trade_value_bn": trade_bn,
+                    "group_no":       group.get("no", 0),
                 })
             except:
                 continue
@@ -133,13 +125,17 @@ def get_week_label():
 def get_month_label():
     return datetime.now().strftime("%Y-%m")
 
-def clear_and_upload(db_id, label, sectors, tag):
+def clear_and_upload(db_id, label, sectors, tag, with_stocks=False):
     for page in notion_query(db_id, label):
         notion_delete(page["id"])
     for rank, s in enumerate(sectors[:10], 1):
-        print(f"  [{rank}위] {s['sector']} {s['change_pct']:+.2f}% | {s['trade_value_bn']}억")
+        if with_stocks:
+            s["stocks"] = get_sector_stocks(s.get("group_no", 0))
+        else:
+            s["stocks"] = "-"
+        print(f"  [{rank}위] {s['sector']} {s['change_pct']:+.2f}% | {s.get('stocks','-')}")
         notion_send(db_id, label, rank, s, tag)
-        time.sleep(0.4)
+        time.sleep(0.5)
 
 # ─────────────────────────────────────────
 # 메인
@@ -160,7 +156,7 @@ def main():
         return
 
     print(f"\n{'='*50}\n[일간] {d_label}\n{'='*50}")
-    clear_and_upload(DAILY_DB_ID, d_label, sectors, "일간")
+    clear_and_upload(DAILY_DB_ID, d_label, sectors, "일간", with_stocks=True)
 
     print(f"\n{'='*50}\n[주간] {w_label}\n{'='*50}")
     clear_and_upload(WEEKLY_DB_ID, w_label, sectors, "주간")
