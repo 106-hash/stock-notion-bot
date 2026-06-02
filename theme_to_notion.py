@@ -142,13 +142,21 @@ def notion_query(db_id, label):
 def notion_delete(page_id):
     notion_curl("PATCH", f"/v1/pages/{page_id}", {"archived": True})
 
+def format_trade(val: str) -> str:
+    """거래대금 쉼표 포맷 (예: 1554.5 → 1,554.5)"""
+    try:
+        num = float(str(val).replace(",", ""))
+        return f"{num:,.1f}"
+    except:
+        return str(val)
+
 def notion_send(db_id, label, rank, theme, stocks_str, tag):
     props = {
         "테마명":      {"title":     [{"text": {"content": theme["theme"]}}]},
         "날짜":        {"rich_text": [{"text": {"content": label}}]},
         "순위":        {"number":    rank},
         "상승률(%)":   {"number":    theme["change_pct"]},
-        "거래대금":    {"rich_text": [{"text": {"content": theme["trade_value"]}}]},
+        "거래대금":    {"rich_text": [{"text": {"content": format_trade(theme["trade_value"])}}]},
         "구성종목":    {"rich_text": [{"text": {"content": stocks_str}}]},
         "구분":        {"select":    {"name": tag}},
     }
